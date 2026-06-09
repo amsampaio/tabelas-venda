@@ -55,20 +55,22 @@
     .filter-clear:active { background: var(--c-bg); }
 
     /* ── PRODUCT TABLE ── */
-    .list-wrap { flex: 1; overflow-y: auto; overflow-x: hidden; }
+    .list-wrap { flex: 1; overflow-y: auto; overflow-x: auto; }
     .empty-state { text-align: center; padding: 60px 20px; color: var(--c-muted); }
     .empty-state svg { opacity: .3; margin-bottom: 12px; }
     .empty-state p { font-size: 15px; }
 
-    .prod-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .prod-table thead tr { background: var(--c-primary); color: #fff; position: sticky; top: 0; z-index: 10; }
-    .prod-table th { padding: 8px 10px; text-align: right; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
-    .prod-table th.col-art { text-align: left; }
+    .prod-table { border-collapse: collapse; font-size: 13px; min-width: 100%; }
+    .prod-table thead tr { background: var(--c-primary); color: #fff; }
+    .prod-table th { padding: 8px 10px; text-align: right; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; position: sticky; top: 0; background: var(--c-primary); z-index: 20; }
+    .prod-table th.col-art { text-align: left; left: 0; z-index: 30; }
     .prod-table tbody tr { border-bottom: 1px solid var(--c-border); }
     .prod-table tbody tr:nth-child(even) { background: #f8fafc; }
     .prod-table tbody tr:nth-child(odd)  { background: var(--c-surface); }
     .prod-table td { padding: 7px 10px; vertical-align: middle; }
-    .prod-table td.col-art { min-width: 0; max-width: 160px; }
+    .prod-table td.col-art { position: sticky; left: 0; z-index: 10; min-width: 130px; max-width: 160px; box-shadow: 2px 0 4px rgba(0,0,0,.06); }
+    .prod-table tbody tr:nth-child(even) td.col-art { background: #f8fafc; }
+    .prod-table tbody tr:nth-child(odd)  td.col-art { background: var(--c-surface); }
     .art-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--c-primary); letter-spacing: .4px; }
     .art-code  { font-size: 10px; color: var(--c-muted); }
     .art-desc  { font-size: 13px; font-weight: 600; line-height: 1.25; }
