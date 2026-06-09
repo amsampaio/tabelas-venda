@@ -192,7 +192,8 @@
     <div class="mode-bar">
       <button class="mode-btn active" data-mode="sale"   id="mode-sale">💼 Venda</button>
       <button class="mode-btn"        data-mode="resale" id="mode-resale">🔄 Revenda</button>
-      <button class="vol-toggle" id="vol-toggle" style="display:none">📦 Vol.</button>
+      <button class="vol-toggle" id="cost-toggle" style="display:none">💰 Custo</button>
+      <button class="vol-toggle" id="vol-toggle"  style="display:none">📦 Vol.</button>
     </div>
 
     <!-- Filters -->
@@ -364,6 +365,7 @@ let state = {
   products: [],
   mode: 'sale',       // 'sale' | 'resale'
   showVolume: false,
+  showCost: false,
   filters: { brand: '', code: '', desc: '' },
 };
 
@@ -484,6 +486,12 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
   });
 });
 
+$('cost-toggle').addEventListener('click', () => {
+  state.showCost = !state.showCost;
+  $('cost-toggle').classList.toggle('active', state.showCost);
+  renderProducts();
+});
+
 $('vol-toggle').addEventListener('click', () => {
   state.showVolume = !state.showVolume;
   $('vol-toggle').classList.toggle('active', state.showVolume);
@@ -492,9 +500,13 @@ $('vol-toggle').addEventListener('click', () => {
 
 function updateVolToggleVisibility() {
   const isFullAccess = state.profile?.role === 'full_access' || state.profile?.role === 'super_admin';
-  const show = isFullAccess && state.mode === 'resale';
-  $('vol-toggle').style.display = show ? '' : 'none';
-  if (!show) { state.showVolume = false; $('vol-toggle').classList.remove('active'); }
+  // Custo: visível para full_access em qualquer modo
+  $('cost-toggle').style.display = isFullAccess ? '' : 'none';
+  if (!isFullAccess) { state.showCost = false; $('cost-toggle').classList.remove('active'); }
+  // Volume: visível para full_access só no modo revenda
+  const showVol = isFullAccess && state.mode === 'resale';
+  $('vol-toggle').style.display = showVol ? '' : 'none';
+  if (!showVol) { state.showVolume = false; $('vol-toggle').classList.remove('active'); }
 }
 
 // ── FILTERS ───────────────────────────────────────────────────
@@ -544,37 +556,31 @@ function renderProducts() {
   let headCols = '';
   let rowFn;
 
+  const costCol = state.showCost ? '<th>Custo</th>' : '';
+  const artTh   = `<th class="col-art">Artigo</th>`;
+
   if (mode === 'sale') {
-    if (isFullAccess) {
-      headCols = `<th class="col-art">Artigo</th><th>Custo</th><th>P. Venda</th>`;
-      rowFn = p => {
-        const sp = calcSalePrice(p);
-        return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
-                <td class="price cost">${fmtCost(p.cost_price)}</td>
-                <td class="price sale">${fmt(sp)}</td>`;
-      };
-    } else {
-      headCols = `<th class="col-art">Artigo</th><th>P. Venda</th>`;
-      rowFn = p => {
-        const sp = calcSalePrice(p);
-        return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
-                <td class="price sale">${fmt(sp)}</td>`;
-      };
-    }
+    headCols = `${artTh}${costCol}<th>P. Venda</th>`;
+    rowFn = p => {
+      const sp = calcSalePrice(p);
+      const costCell = state.showCost ? `<td class="price cost">${fmtCost(p.cost_price)}</td>` : '';
+      return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
+              ${costCell}<td class="price sale">${fmt(sp)}</td>`;
+    };
   } else {
     if (isFullAccess) {
       const volCol = state.showVolume ? '<th>Rev. Vol.</th>' : '';
-      headCols = `<th class="col-art">Artigo</th><th>Custo</th><th>PVP</th><th>Revenda</th>${volCol}`;
+      headCols = `${artTh}${costCol}<th>PVP</th><th>Revenda</th>${volCol}`;
       rowFn = p => {
         const sp = calcSalePrice(p); const rp = calcResalePrice(p);
-        const volCell = state.showVolume ? `<td class="price vol">${fmt(calcVolumePrice(p))}</td>` : '';
+        const costCell = state.showCost  ? `<td class="price cost">${fmtCost(p.cost_price)}</td>` : '';
+        const volCell  = state.showVolume ? `<td class="price vol">${fmt(calcVolumePrice(p))}</td>` : '';
         return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
-                <td class="price cost">${fmtCost(p.cost_price)}</td>
-                <td class="price sale">${fmt(sp)}</td>
+                ${costCell}<td class="price sale">${fmt(sp)}</td>
                 <td class="price resale">${fmt(rp)}</td>${volCell}`;
       };
     } else {
-      headCols = `<th class="col-art">Artigo</th><th>PVP Acons.</th><th>Revenda</th>`;
+      headCols = `${artTh}<th>PVP Acons.</th><th>Revenda</th>`;
       rowFn = p => {
         const sp = calcSalePrice(p); const rp = calcResalePrice(p);
         return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
