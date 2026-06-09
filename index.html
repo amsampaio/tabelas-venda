@@ -285,9 +285,24 @@
                   <div id="pf-resale-hint" class="form-hint"></div>
                 </div>
               </div>
-              <div class="form-group" style="margin-top:8px">
-                <label class="form-label">Preço Revenda Volume (€) <span style="font-weight:400;color:var(--c-muted)">(opcional — substitui o calculado)</span></label>
-                <input id="pf-vol" class="form-input" type="number" step="0.01" min="0" placeholder="Deixar vazio = calculado automaticamente">
+            </div>
+
+            <!-- Volume resale config -->
+            <div style="border-top:1px solid var(--c-border);padding-top:10px;">
+              <div class="section-title" style="margin-bottom:8px">Preço de Revenda Volume</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Tipo</label>
+                  <select id="pf-vol-type" class="form-select" onchange="updateVolHint()">
+                    <option value="percent_discount">Desconto (%)</option>
+                    <option value="value_discount">Desconto (€)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" id="pf-vol-lbl">Desconto (%)</label>
+                  <input id="pf-vol-val" class="form-input" type="number" step="0.01" min="0" placeholder="40">
+                  <div id="pf-vol-hint" class="form-hint"></div>
+                </div>
               </div>
             </div>
 
@@ -358,7 +373,10 @@ function calcResalePrice(p) {
   return sp - p.resale_config_value;
 }
 function calcVolumePrice(p) {
-  return p.volume_resale_price ?? calcResalePrice(p);
+  const sp = calcSalePrice(p);
+  if (p.volume_resale_config_type === 'value_discount')
+    return sp - p.volume_resale_config_value;
+  return sp * (1 - p.volume_resale_config_value / 100);
 }
 
 function toast(msg, ms = 2500) {
@@ -508,23 +526,23 @@ function renderProducts() {
     }
   } else {
     if (isFullAccess) {
-      headCols = `<th class="col-art">Artigo</th><th>Custo</th><th>Revenda</th><th>Rev. Vol.</th><th>PVP Acons.</th>`;
+      headCols = `<th class="col-art">Artigo</th><th>Custo</th><th>PVP</th><th>Revenda</th><th>Rev. Vol.</th>`;
       rowFn = p => {
         const sp = calcSalePrice(p); const rp = calcResalePrice(p); const vp = calcVolumePrice(p);
         return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
                 <td class="price cost">${fmt(p.cost_price)}</td>
+                <td class="price sale">${fmt(sp)}</td>
                 <td class="price resale">${fmt(rp)}</td>
-                <td class="price vol">${fmt(vp)}</td>
-                <td class="price sale">${fmt(sp)}</td>`;
+                <td class="price vol">${fmt(vp)}</td>`;
       };
     } else {
-      headCols = `<th class="col-art">Artigo</th><th>Revenda</th><th>Rev. Vol.</th><th>PVP Acons.</th>`;
+      headCols = `<th class="col-art">Artigo</th><th>PVP Acons.</th><th>Revenda</th><th>Rev. Vol.</th>`;
       rowFn = p => {
         const sp = calcSalePrice(p); const rp = calcResalePrice(p); const vp = calcVolumePrice(p);
         return `<td class="col-art"><div class="art-brand">${p.brand||''}</div><div class="art-code">${p.code}</div><div class="art-desc">${p.description}</div></td>
+                <td class="price sale">${fmt(sp)}</td>
                 <td class="price resale">${fmt(rp)}</td>
-                <td class="price vol">${fmt(vp)}</td>
-                <td class="price sale">${fmt(sp)}</td>`;
+                <td class="price vol">${fmt(vp)}</td>`;
       };
     }
   }
@@ -564,19 +582,25 @@ function updateSaleHint() {
 function updateResaleHint() {
   const t = $('pf-resale-type').value;
   $('pf-resale-lbl').textContent = t === 'percent_discount' ? 'Desconto (%)' : 'Desconto (€)';
-  $('pf-resale-hint').textContent = t === 'percent_discount' ? 'Ex: 15 → revenda = venda × 0.85' : 'Ex: 5 → revenda = venda − 5€';
+  $('pf-resale-hint').textContent = t === 'percent_discount' ? 'Ex: 25 → revenda = venda × 0.75' : 'Ex: 5 → revenda = venda − 5€';
 }
-updateSaleHint(); updateResaleHint();
+function updateVolHint() {
+  const t = $('pf-vol-type').value;
+  $('pf-vol-lbl').textContent = t === 'percent_discount' ? 'Desconto (%)' : 'Desconto (€)';
+  $('pf-vol-hint').textContent = t === 'percent_discount' ? 'Ex: 40 → vol = venda × 0.60' : 'Ex: 10 → vol = venda − 10€';
+}
+updateSaleHint(); updateResaleHint(); updateVolHint();
 
 function clearProductForm() {
   $('pf-id').value = '';
   $('pf-brand').value = $('pf-code').value = $('pf-desc').value = '';
-  $('pf-cost').value = $('pf-sale-val').value = $('pf-resale-val').value = $('pf-vol').value = '';
+  $('pf-cost').value = $('pf-sale-val').value = $('pf-resale-val').value = $('pf-vol-val').value = '';
   $('pf-sale-type').value = 'margin';
   $('pf-resale-type').value = 'percent_discount';
+  $('pf-vol-type').value = 'percent_discount';
   $('pf-cancel').style.display = 'none';
   $('pf-save').textContent = '💾 Guardar Artigo';
-  updateSaleHint(); updateResaleHint();
+  updateSaleHint(); updateResaleHint(); updateVolHint();
 }
 
 function editProduct(p) {
@@ -587,12 +611,13 @@ function editProduct(p) {
   $('pf-cost').value  = p.cost_price;
   $('pf-sale-type').value  = p.sale_config_type;
   $('pf-sale-val').value   = p.sale_config_value;
-  $('pf-resale-type').value = p.resale_config_type;
-  $('pf-resale-val').value  = p.resale_config_value;
-  $('pf-vol').value = p.volume_resale_price ?? '';
+  $('pf-resale-type').value  = p.resale_config_type;
+  $('pf-resale-val').value   = p.resale_config_value;
+  $('pf-vol-type').value     = p.volume_resale_config_type;
+  $('pf-vol-val').value      = p.volume_resale_config_value;
   $('pf-cancel').style.display = '';
   $('pf-save').textContent = '💾 Atualizar Artigo';
-  updateSaleHint(); updateResaleHint();
+  updateSaleHint(); updateResaleHint(); updateVolHint();
   $('product-form').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -611,9 +636,10 @@ $('pf-save').addEventListener('click', async () => {
     cost_price:          parseFloat($('pf-cost').value)   || 0,
     sale_config_type:    $('pf-sale-type').value,
     sale_config_value:   parseFloat($('pf-sale-val').value) || 0,
-    resale_config_type:  $('pf-resale-type').value,
-    resale_config_value: parseFloat($('pf-resale-val').value) || 0,
-    volume_resale_price: $('pf-vol').value ? parseFloat($('pf-vol').value) : null,
+    resale_config_type:         $('pf-resale-type').value,
+    resale_config_value:        parseFloat($('pf-resale-val').value) || 0,
+    volume_resale_config_type:  $('pf-vol-type').value,
+    volume_resale_config_value: parseFloat($('pf-vol-val').value) || 0,
   };
 
   let error;
