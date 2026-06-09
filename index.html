@@ -357,8 +357,16 @@ let state = {
 
 // ── HELPERS ───────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const fmt     = v => v == null ? '—' : Math.round(Number(v)).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const fmtCost = v => v == null ? '—' : Number(v).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = v => {
+  if (v == null) return '—';
+  const n = Math.round(Number(v));
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' €';
+};
+const fmtCost = v => {
+  if (v == null) return '—';
+  const [int, dec] = Number(v).toFixed(2).split('.');
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + dec + ' €';
+};
 
 function calcSalePrice(p) {
   if (p.sale_config_type === 'margin') {
