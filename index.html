@@ -256,7 +256,7 @@
                 <div class="form-group">
                   <label class="form-label">Tipo</label>
                   <select id="pf-sale-type" class="form-select" onchange="updateSaleHint()">
-                    <option value="margin">Margem (%)</option>
+                    <option value="margin">Margem s/ PV (%)</option>
                     <option value="price">Preço direto (€)</option>
                   </select>
                 </div>
@@ -345,8 +345,10 @@ const $ = id => document.getElementById(id);
 const fmt = v => v == null ? '—' : Number(v).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 
 function calcSalePrice(p) {
-  if (p.sale_config_type === 'margin')
-    return p.cost_price * (1 + p.sale_config_value / 100);
+  if (p.sale_config_type === 'margin') {
+    const m = p.sale_config_value / 100;
+    return m >= 1 ? p.cost_price : Math.round(p.cost_price / (1 - m));
+  }
   return p.sale_config_value;
 }
 function calcResalePrice(p) {
@@ -557,7 +559,7 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
 function updateSaleHint() {
   const t = $('pf-sale-type').value;
   $('pf-sale-lbl').textContent = t === 'margin' ? 'Margem (%)' : 'Preço (€)';
-  $('pf-sale-hint').textContent = t === 'margin' ? 'Ex: 30 → preço = custo × 1.30' : 'Ex: 25.00 → preço de venda fixo';
+  $('pf-sale-hint').textContent = t === 'margin' ? 'Ex: 50 → preço = custo ÷ 0.50 (margem s/ PV)' : 'Ex: 25.00 → preço de venda fixo';
 }
 function updateResaleHint() {
   const t = $('pf-resale-type').value;
