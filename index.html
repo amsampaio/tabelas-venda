@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tabelas de Venda</title>
+  <title>Tabela de Preços</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     /* ── RESET & BASE ── */
@@ -161,7 +161,7 @@
   <!-- Login -->
   <div id="login-screen" style="display:none">
     <div class="login-logo">
-      <h1>Tabelas de Venda</h1>
+      <h1>Tabela de Preços</h1>
       <p>Acesso restrito à equipa comercial</p>
     </div>
     <div class="login-card">
@@ -183,7 +183,8 @@
 
     <!-- Topbar -->
     <div class="topbar">
-      <div class="topbar-title">Tabelas de Venda</div>
+      <img src="icon.ico" alt="" style="width:30px;height:30px;border-radius:7px;flex-shrink:0;object-fit:cover;">
+      <div class="topbar-title">Tabela de Preços</div>
       <span id="user-name" class="topbar-user"></span>
       <button id="logout-btn" class="topbar-btn">Sair</button>
     </div>
@@ -378,8 +379,8 @@ const fmt = v => {
 };
 const fmtCost = v => {
   if (v == null) return '—';
-  const [int, dec] = Number(v).toFixed(2).split('.');
-  return int.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + dec + ' €';
+  const n = Math.round(Number(v));
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' €';
 };
 
 function calcSalePrice(p) {
@@ -570,7 +571,7 @@ function renderProducts() {
   } else {
     if (isFullAccess) {
       const volCol = state.showVolume ? '<th>Rev. Vol.</th>' : '';
-      headCols = `${artTh}${costCol}<th>PVP</th><th>Revenda</th>${volCol}`;
+      headCols = `${artTh}${costCol}<th>PVP Acons.</th><th>Revenda</th>${volCol}`;
       rowFn = p => {
         const sp = calcSalePrice(p); const rp = calcResalePrice(p);
         const costCell = state.showCost  ? `<td class="price cost">${fmtCost(p.cost_price)}</td>` : '';
