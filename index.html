@@ -134,6 +134,10 @@
     .form-select { padding: 12px 14px; border: 1px solid var(--c-border); border-radius: 8px; font-size: 15px; color: var(--c-text); background: var(--c-surface); outline: none; width: 100%; }
     .form-select:focus { border-color: var(--c-primary); }
     .form-hint { font-size: 12px; color: var(--c-muted); margin-top: 2px; }
+    .price-preview { margin-top: 6px; padding: 7px 12px; border-radius: 8px; font-size: 15px; font-weight: 700; display: none; }
+    .price-preview.sale   { background: #eff6ff; color: var(--c-sale); }
+    .price-preview.resale { background: #ecfdf5; color: var(--c-resale); }
+    .price-preview.vol    { background: #fffbeb; color: var(--c-vol); }
 
     /* product list in admin */
     .admin-list { display: flex; flex-direction: column; gap: 8px; }
@@ -268,7 +272,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Tipo</label>
-                  <select id="pf-sale-type" class="form-select" onchange="updateSaleHint()">
+                  <select id="pf-sale-type" class="form-select" onchange="updateAllPreviews()">
                     <option value="margin">Margem s/ PV (%)</option>
                     <option value="price">Preço direto (€)</option>
                   </select>
@@ -279,6 +283,7 @@
                   <div id="pf-sale-hint" class="form-hint"></div>
                 </div>
               </div>
+              <div id="pf-sale-preview" class="price-preview sale"></div>
             </div>
 
             <!-- Resale price config -->
@@ -287,7 +292,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Tipo</label>
-                  <select id="pf-resale-type" class="form-select" onchange="updateResaleHint()">
+                  <select id="pf-resale-type" class="form-select" onchange="updateAllPreviews()">
                     <option value="percent_discount">Desconto (%)</option>
                     <option value="value_discount">Desconto (€)</option>
                   </select>
@@ -298,6 +303,7 @@
                   <div id="pf-resale-hint" class="form-hint"></div>
                 </div>
               </div>
+              <div id="pf-resale-preview" class="price-preview resale"></div>
             </div>
 
             <!-- Volume resale config -->
@@ -306,7 +312,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Tipo</label>
-                  <select id="pf-vol-type" class="form-select" onchange="updateVolHint()">
+                  <select id="pf-vol-type" class="form-select" onchange="updateAllPreviews()">
                     <option value="percent_discount">Desconto (%)</option>
                     <option value="value_discount">Desconto (€)</option>
                   </select>
@@ -317,6 +323,7 @@
                   <div id="pf-vol-hint" class="form-hint"></div>
                 </div>
               </div>
+              <div id="pf-vol-preview" class="price-preview vol"></div>
             </div>
 
             <div style="display:flex;gap:8px;margin-top:4px">
@@ -624,22 +631,55 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
 });
 
 // product form helpers
-function updateSaleHint() {
-  const t = $('pf-sale-type').value;
-  $('pf-sale-lbl').textContent = t === 'margin' ? 'Margem (%)' : 'Preço (€)';
-  $('pf-sale-hint').textContent = t === 'margin' ? 'Ex: 50 → preço = custo ÷ 0.50 (margem s/ PV)' : 'Ex: 25.00 → preço de venda fixo';
+function getFormProduct() {
+  return {
+    cost_price:                 parseFloat($('pf-cost').value)       || 0,
+    sale_config_type:           $('pf-sale-type').value,
+    sale_config_value:          parseFloat($('pf-sale-val').value)   || 0,
+    resale_config_type:         $('pf-resale-type').value,
+    resale_config_value:        parseFloat($('pf-resale-val').value) || 0,
+    volume_resale_config_type:  $('pf-vol-type').value,
+    volume_resale_config_value: parseFloat($('pf-vol-val').value)    || 0,
+  };
 }
-function updateResaleHint() {
-  const t = $('pf-resale-type').value;
-  $('pf-resale-lbl').textContent = t === 'percent_discount' ? 'Desconto (%)' : 'Desconto (€)';
-  $('pf-resale-hint').textContent = t === 'percent_discount' ? 'Ex: 25 → revenda = venda × 0.75' : 'Ex: 5 → revenda = venda − 5€';
+
+function showPreview(el, value, label) {
+  if (value != null && isFinite(value) && value > 0) {
+    el.textContent = label + fmt(value);
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
 }
-function updateVolHint() {
-  const t = $('pf-vol-type').value;
-  $('pf-vol-lbl').textContent = t === 'percent_discount' ? 'Desconto (%)' : 'Desconto (€)';
-  $('pf-vol-hint').textContent = t === 'percent_discount' ? 'Ex: 40 → vol = venda × 0.60' : 'Ex: 10 → vol = venda − 10€';
+
+function updateAllPreviews() {
+  const p = getFormProduct();
+
+  // Labels
+  $('pf-sale-lbl').textContent   = p.sale_config_type === 'margin' ? 'Margem (%)' : 'Preço (€)';
+  $('pf-resale-lbl').textContent = p.resale_config_type === 'percent_discount' ? 'Desconto (%)' : 'Desconto (€)';
+  $('pf-vol-lbl').textContent    = p.volume_resale_config_type === 'percent_discount' ? 'Desconto (%)' : 'Desconto (€)';
+
+  // Hints
+  $('pf-sale-hint').textContent   = p.sale_config_type === 'margin' ? 'custo ÷ (1 − margem%)' : 'preço de venda fixo';
+  $('pf-resale-hint').textContent = p.resale_config_type === 'percent_discount' ? 'venda × (1 − desc%)' : 'venda − valor';
+  $('pf-vol-hint').textContent    = p.volume_resale_config_type === 'percent_discount' ? 'venda × (1 − desc%)' : 'venda − valor';
+
+  // Live price previews
+  const hasSaleInput = p.sale_config_value > 0;
+  const sp = hasSaleInput ? calcSalePrice(p) : null;
+
+  showPreview($('pf-sale-preview'),   sp,                         'P. Venda = ');
+  showPreview($('pf-resale-preview'), sp ? calcResalePrice(p) : null, 'Revenda = ');
+  showPreview($('pf-vol-preview'),    sp ? calcVolumePrice(p) : null, 'Rev. Vol. = ');
 }
-updateSaleHint(); updateResaleHint(); updateVolHint();
+
+// Wire up live preview on all relevant fields
+['pf-cost','pf-sale-val','pf-resale-val','pf-vol-val'].forEach(id => {
+  $(id).addEventListener('input', updateAllPreviews);
+});
+
+updateAllPreviews();
 
 function clearProductForm() {
   $('pf-id').value = '';
@@ -650,7 +690,7 @@ function clearProductForm() {
   $('pf-vol-type').value = 'percent_discount';
   $('pf-cancel').style.display = 'none';
   $('pf-save').textContent = '💾 Guardar Artigo';
-  updateSaleHint(); updateResaleHint(); updateVolHint();
+  updateAllPreviews();
 }
 
 function editProduct(p) {
@@ -667,7 +707,7 @@ function editProduct(p) {
   $('pf-vol-val').value      = p.volume_resale_config_value;
   $('pf-cancel').style.display = '';
   $('pf-save').textContent = '💾 Atualizar Artigo';
-  updateSaleHint(); updateResaleHint(); updateVolHint();
+  updateAllPreviews();
   $('product-form').scrollIntoView({ behavior: 'smooth' });
 }
 
