@@ -1156,15 +1156,71 @@ $('import-run').addEventListener('click', async () => {
 });
 
 $('dl-template').addEventListener('click', () => {
-  const data = [
-    ['Marca','Código','Descrição','Custo','Tipo Venda','Venda','Tipo Revenda','Revenda','Tipo Volume','Volume','Ativo'],
-    ['MARCA','ART-001','Produto Exemplo A',10.00,'margem',30,'desc%',20,'desc%',30,'sim'],
-    ['MARCA','ART-002','Produto Exemplo B',50.00,'preço',75.00,'desc€',5,'desc€',10,'sim'],
-  ];
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:12},{wch:12},{wch:30},{wch:8},{wch:12},{wch:8},{wch:14},{wch:8},{wch:12},{wch:8},{wch:6}];
   const wb = XLSX.utils.book_new();
+  const ws = {};
+
+  // Cabeçalhos — colunas de input (A-K) + colunas calculadas (L-N)
+  const headers = [
+    'Marca','Código','Descrição','Custo',
+    'Tipo Venda','Venda',
+    'Tipo Revenda','Revenda',
+    'Tipo Volume','Volume',
+    'Ativo',
+    '→ P. Venda','→ P. Revenda','→ P. Volume'
+  ];
+  headers.forEach((h, c) => {
+    ws[XLSX.utils.encode_cell({r:0, c})] = {v: h, t:'s'};
+  });
+
+  // Linhas de exemplo
+  const examples = [
+    ['MARCA','ART-001','Produto Exemplo A', 10.00,'margem', 30,'desc%',20,'desc%',30,'sim'],
+    ['MARCA','ART-002','Produto Exemplo B', 50.00,'preço',  75,'desc€', 5,'desc€',10,'sim'],
+  ];
+  examples.forEach((row, ri) => {
+    const r = ri + 1;
+    row.forEach((v, c) => {
+      ws[XLSX.utils.encode_cell({r, c})] = {v, t: typeof v === 'number' ? 'n' : 's'};
+    });
+  });
+
+  // Fórmulas para linhas 2-51 (índices 1-50)
+  for (let ri = 1; ri <= 50; ri++) {
+    const n = ri + 1; // número da linha no Excel
+    ws[XLSX.utils.encode_cell({r:ri, c:11})] = {
+      f: `IF(D${n}="","",IF(E${n}="margem",ROUND(D${n}/(1-F${n}/100),0),ROUND(F${n},0)))`
+    };
+    ws[XLSX.utils.encode_cell({r:ri, c:12})] = {
+      f: `IF(L${n}="","",IF(G${n}="desc%",ROUND(L${n}*(1-H${n}/100),0),ROUND(L${n}-H${n},0)))`
+    };
+    ws[XLSX.utils.encode_cell({r:ri, c:13})] = {
+      f: `IF(L${n}="","",IF(I${n}="desc%",ROUND(L${n}*(1-J${n}/100),0),ROUND(L${n}-J${n},0)))`
+    };
+  }
+
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:50,c:13}});
+  ws['!cols'] = [
+    {wch:12},{wch:12},{wch:32},{wch:8},
+    {wch:12},{wch:8},
+    {wch:14},{wch:8},
+    {wch:12},{wch:8},
+    {wch:6},
+    {wch:12},{wch:13},{wch:12}
+  ];
   XLSX.utils.book_append_sheet(wb, ws, 'Artigos');
+
+  // Folha de legenda
+  const leg = XLSX.utils.aoa_to_sheet([
+    ['Campo','Valores aceites','Descrição'],
+    ['Tipo Venda','margem','Preço = Custo ÷ (1 − Venda%)'],
+    ['Tipo Venda','preço','Preço = valor fixo em Venda'],
+    ['Tipo Revenda / Tipo Volume','desc%','Preço = P.Venda × (1 − Revenda%)'],
+    ['Tipo Revenda / Tipo Volume','desc€','Preço = P.Venda − Revenda'],
+    ['Ativo','sim / não','Deixar vazio = sim'],
+  ]);
+  leg['!cols'] = [{wch:28},{wch:16},{wch:36}];
+  XLSX.utils.book_append_sheet(wb, leg, 'Legenda');
+
   XLSX.writeFile(wb, 'template_artigos.xlsx');
 });
 
