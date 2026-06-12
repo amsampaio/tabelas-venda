@@ -164,6 +164,34 @@
     /* ── TOAST ── */
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 14px; z-index: 9999; animation: fadeUp .25s ease; pointer-events: none; white-space: nowrap; }
     @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+
+    /* ── DESKTOP ── */
+    @media (min-width: 768px) {
+      #app { max-width: 100%; }
+
+      /* Coluna artigo: largura automática, sem restrição de 50vw */
+      .prod-table th.col-art { width: auto; min-width: 220px; max-width: 420px; }
+      .prod-table td.col-art { width: auto; min-width: 220px; max-width: 420px; }
+
+      /* Tabela mais espaçada */
+      .prod-table th { padding: 10px 16px; font-size: 12px; }
+      .prod-table td { padding: 9px 16px; }
+      .prod-table td.price { font-size: 14px; }
+      .art-desc { font-size: 14px; }
+      .art-brand { font-size: 11px; }
+      .art-code  { font-size: 11px; }
+
+      /* Filtros e barras com mais padding */
+      .filters, .mode-bar { padding: 10px 24px; }
+      .topbar { padding: 12px 24px; }
+
+      /* Modal mais larga */
+      .modal { max-width: 600px; margin: auto; border-radius: var(--radius); }
+      .modal-overlay { align-items: center; justify-content: center; }
+
+      /* Admin FAB mais discreto */
+      .admin-fab { bottom: 32px; right: 32px; }
+    }
   </style>
 </head>
 <body>
@@ -349,9 +377,36 @@
 
         <!-- Users tab -->
         <div id="tab-users" style="display:none">
-          <div class="section-title">Utilizadores</div>
-          <div class="notice">Os utilizadores são criados através da opção <strong>Authentication → Users</strong> no painel do Supabase. Aqui pode apenas alterar o perfil/função de cada um.</div>
-          <div id="admin-user-list" style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+          <div class="section-title">Criar Utilizador</div>
+          <div id="user-form" style="background:var(--c-bg);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:12px;">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Nome *</label>
+                <input id="uf-name" class="form-input" placeholder="Nome completo">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Função *</label>
+                <select id="uf-role" class="form-select">
+                  <option value="comercial">Comercial</option>
+                  <option value="full_access">Acesso Total</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email *</label>
+              <input id="uf-email" class="form-input" type="email" placeholder="email@empresa.com" inputmode="email">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password *</label>
+              <input id="uf-pass" class="form-input" type="password" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div id="uf-error" style="color:var(--c-danger);font-size:13px;display:none"></div>
+            <button id="uf-save" class="btn-success">➕ Criar Utilizador</button>
+          </div>
+
+          <div class="section-title" style="margin-top:16px;margin-bottom:8px">Utilizadores Existentes</div>
+          <div id="admin-user-list" style="display:flex;flex-direction:column;gap:8px;">
             <div class="spinner"><div class="spin"></div></div>
           </div>
         </div>
@@ -825,6 +880,48 @@ async function updateUserRole(id, role) {
     else $('admin-fab').style.display = 'none';
   }
 }
+
+// ── CREATE USER ───────────────────────────────────────────────
+$('uf-save').addEventListener('click', async () => {
+  const name  = $('uf-name').value.trim();
+  const email = $('uf-email').value.trim();
+  const pass  = $('uf-pass').value;
+  const role  = $('uf-role').value;
+  const errEl = $('uf-error');
+
+  errEl.style.display = 'none';
+  if (!name || !email || !pass) { errEl.textContent = 'Preencha todos os campos.'; errEl.style.display = ''; return; }
+  if (pass.length < 6) { errEl.textContent = 'Password mínimo 6 caracteres.'; errEl.style.display = ''; return; }
+
+  $('uf-save').disabled = true;
+  $('uf-save').textContent = 'A criar…';
+
+  const { data: { session } } = await db.auth.getSession();
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': SUPABASE_KEY,
+    },
+    body: JSON.stringify({ email, name, role, password: pass }),
+  });
+
+  const json = await res.json();
+  $('uf-save').disabled = false;
+  $('uf-save').textContent = '➕ Criar Utilizador';
+
+  if (!res.ok || json.error) {
+    errEl.textContent = json.error || 'Erro desconhecido.';
+    errEl.style.display = '';
+    return;
+  }
+
+  toast('Utilizador criado ✓');
+  $('uf-name').value = $('uf-email').value = $('uf-pass').value = '';
+  $('uf-role').value = 'comercial';
+  loadAdminUsers();
+});
 
 // ── START ──────────────────────────────────────────────────────
 init();
