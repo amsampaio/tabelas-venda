@@ -216,6 +216,26 @@
     </div>
   </div>
 
+  <!-- Set Password (invite / recovery) -->
+  <div id="setpass-screen" style="display:none; flex-direction:column; justify-content:center; padding:32px 24px; gap:16px; flex:1;">
+    <div class="login-logo">
+      <h1>Tabela de Preços</h1>
+      <p id="setpass-subtitle">Escolha a sua password de acesso</p>
+    </div>
+    <div class="login-card">
+      <div class="form-group">
+        <label class="form-label">Nova Password</label>
+        <input id="setpass-input" class="form-input" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar Password</label>
+        <input id="setpass-confirm" class="form-input" type="password" placeholder="Repita a password" autocomplete="new-password">
+      </div>
+      <div id="setpass-error" class="login-error" style="display:none"></div>
+      <button id="setpass-btn" class="btn-primary">Guardar Password</button>
+    </div>
+  </div>
+
   <!-- Main App -->
   <div id="main-screen" style="display:none; display:flex; flex-direction:column; height:100%; display:none;">
 
@@ -493,6 +513,17 @@ async function init() {
   }
 
   db.auth.onAuthStateChange(async (event, session) => {
+    const urlType = new URLSearchParams(window.location.hash.substring(1)).get('type');
+    if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && urlType === 'invite') {
+      state.user = session.user;
+      showSetPassword('Bem-vindo! Escolha a sua password de acesso.');
+      return;
+    }
+    if (event === 'PASSWORD_RECOVERY') {
+      state.user = session.user;
+      showSetPassword('Defina a sua nova password.');
+      return;
+    }
     if (event === 'SIGNED_IN' && session?.user) {
       state.user = session.user;
       state.profile = await loadProfile(session.user);
@@ -520,15 +551,43 @@ $('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('log
 
 $('logout-btn').addEventListener('click', () => db.auth.signOut());
 
+$('setpass-btn').addEventListener('click', async () => {
+  const pass    = $('setpass-input').value;
+  const confirm = $('setpass-confirm').value;
+  const errEl   = $('setpass-error');
+  errEl.style.display = 'none';
+  if (pass.length < 6) { errEl.textContent = 'Password mínimo 6 caracteres.'; errEl.style.display = ''; return; }
+  if (pass !== confirm) { errEl.textContent = 'As passwords não coincidem.'; errEl.style.display = ''; return; }
+  $('setpass-btn').disabled = true;
+  $('setpass-btn').textContent = 'A guardar…';
+  const { error } = await db.auth.updateUser({ password: pass });
+  $('setpass-btn').disabled = false;
+  $('setpass-btn').textContent = 'Guardar Password';
+  if (error) { errEl.textContent = error.message; errEl.style.display = ''; return; }
+  history.replaceState(null, '', window.location.pathname);
+  state.profile = await loadProfile(state.user);
+  showMain();
+});
+$('setpass-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('setpass-confirm').focus(); });
+$('setpass-confirm').addEventListener('keydown', e => { if (e.key === 'Enter') $('setpass-btn').click(); });
+
 function showLoginError(msg) {
   const el = $('login-error');
   el.textContent = msg; el.style.display = '';
 }
 
 function showLogin() {
-  $('login-screen').style.display = 'flex';
-  $('main-screen').style.display  = 'none';
-  $('admin-fab').style.display    = 'none';
+  $('login-screen').style.display  = 'flex';
+  $('setpass-screen').style.display = 'none';
+  $('main-screen').style.display   = 'none';
+  $('admin-fab').style.display     = 'none';
+}
+function showSetPassword(subtitle) {
+  $('login-screen').style.display  = 'none';
+  $('setpass-screen').style.display = 'flex';
+  $('main-screen').style.display   = 'none';
+  $('admin-fab').style.display     = 'none';
+  if (subtitle) $('setpass-subtitle').textContent = subtitle;
 }
 function showMain() {
   if (state.profile?.blocked) {
@@ -871,7 +930,26 @@ async function loadAdminUsers() {
         <option value="super_admin" ${u.role==='super_admin' ?'selected':''}>Super Admin</option>
       </select>
       <button class="icon-btn" title="${u.blocked ? 'Desbloquear' : 'Bloquear'}" onclick="toggleBlockUser('${u.id}', ${u.blocked})">${u.blocked ? '🔓' : '🚫'}</button>
+      <button class="icon-btn" title="Eliminar utilizador" onclick="deleteUser('${u.id}', '${(u.name||'').replace(/'/g,'')}')" style="border-color:#fca5a5">🗑️</button>
     </div>`).join('');
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`Eliminar "${name || id}"? Esta ação não pode ser revertida.`)) return;
+  const { data: { session } } = await db.auth.getSession();
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': SUPABASE_KEY,
+    },
+    body: JSON.stringify({ user_id: id }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.error) { toast('Erro: ' + (json.error || 'desconhecido')); return; }
+  toast('Utilizador eliminado ✓');
+  loadAdminUsers();
 }
 
 async function toggleBlockUser(id, currentlyBlocked) {
