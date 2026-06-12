@@ -930,12 +930,30 @@ async function loadAdminUsers() {
         <option value="super_admin" ${u.role==='super_admin' ?'selected':''}>Super Admin</option>
       </select>
       <button class="icon-btn" title="${u.blocked ? 'Desbloquear' : 'Bloquear'}" onclick="toggleBlockUser('${u.id}', ${u.blocked})">${u.blocked ? '🔓' : '🚫'}</button>
-      <button class="icon-btn" title="Eliminar utilizador" onclick="deleteUser('${u.id}', '${(u.name||'').replace(/'/g,'')}')" style="border-color:#fca5a5">🗑️</button>
+      <button class="icon-btn" title="Eliminar utilizador" onclick="deleteUser('${u.id}', this)" style="border-color:#fca5a5">🗑️</button>
     </div>`).join('');
 }
 
-async function deleteUser(id, name) {
-  if (!confirm(`Eliminar "${name || id}"? Esta ação não pode ser revertida.`)) return;
+async function deleteUser(id, btn) {
+  if (btn.dataset.confirming !== '1') {
+    btn.dataset.confirming = '1';
+    btn.textContent = '⚠️';
+    btn.title = 'Clique novamente para confirmar';
+    btn.style.background = '#fef2f2';
+    btn.style.borderColor = 'var(--c-danger)';
+    setTimeout(() => {
+      if (btn.dataset.confirming === '1') {
+        btn.dataset.confirming = '';
+        btn.textContent = '🗑️';
+        btn.title = 'Eliminar utilizador';
+        btn.style.background = '';
+        btn.style.borderColor = '#fca5a5';
+      }
+    }, 3000);
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '…';
   const { data: { session } } = await db.auth.getSession();
   const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
     method: 'POST',
@@ -947,7 +965,7 @@ async function deleteUser(id, name) {
     body: JSON.stringify({ user_id: id }),
   });
   const json = await res.json();
-  if (!res.ok || json.error) { toast('Erro: ' + (json.error || 'desconhecido')); return; }
+  if (!res.ok || json.error) { toast('Erro: ' + (json.error || 'desconhecido')); btn.disabled = false; btn.textContent = '🗑️'; return; }
   toast('Utilizador eliminado ✓');
   loadAdminUsers();
 }
