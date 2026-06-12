@@ -13,6 +13,7 @@
   <link rel="shortcut icon" href="icon.ico" type="image/x-icon">
   <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     /* ── RESET & BASE ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -378,6 +379,19 @@
               <button id="pf-save" class="btn-success" style="flex:1">💾 Guardar Artigo</button>
               <button id="pf-cancel" class="btn-secondary" style="display:none">Cancelar</button>
             </div>
+          </div>
+
+          <!-- Import Excel -->
+          <div style="border-top:1px solid var(--c-border);padding-top:12px;margin-top:4px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div class="section-title" style="margin:0;flex:1">Importar / Atualizar via Excel</div>
+              <button id="dl-template" class="btn-secondary" style="font-size:12px;padding:6px 10px;white-space:nowrap">⬇️ Template</button>
+            </div>
+            <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none">
+            <button id="import-pick" class="btn-secondary" style="width:100%">📂 Selecionar ficheiro Excel</button>
+            <div id="import-preview" style="display:none;margin-top:10px;"></div>
+            <button id="import-run" class="btn-success" style="display:none;width:100%;margin-top:8px">⬆️ Importar / Atualizar Artigos</button>
+            <div id="import-result" style="margin-top:8px;display:none;"></div>
           </div>
 
           <!-- Product list -->
@@ -1012,6 +1026,147 @@ async function updateUserRole(id, role) {
     else $('admin-fab').style.display = 'none';
   }
 }
+
+// ── EXCEL IMPORT ──────────────────────────────────────────────
+let importData = [];
+
+function normalizeKey(s) {
+  return (s||'').toString().toLowerCase().trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+function parseTypeVenda(v) {
+  const s = normalizeKey(v);
+  return (s.includes('pre') || s.includes('dire')) ? 'price' : 'margin';
+}
+function parseTypeRevenda(v) {
+  const s = normalizeKey(v);
+  return (s.includes('€') || s.includes('eur') || s.includes('valor') || s === 'desc€' || s.includes('value')) ? 'value_discount' : 'percent_discount';
+}
+
+$('import-pick').addEventListener('click', () => $('import-file').click());
+
+$('import-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { toast('Ficheiro vazio ou sem dados.'); return; }
+
+      const headers = rows[0].map(normalizeKey);
+      const ci = {};
+      headers.forEach((h, i) => { ci[h] = i; });
+
+      // Aceita colunas com ou sem acento
+      const get = (row, ...keys) => {
+        for (const k of keys) { if (ci[k] !== undefined) return row[ci[k]]; }
+        return '';
+      };
+
+      importData = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        const code = (get(r,'codigo','código')||'').toString().trim();
+        if (!code) continue;
+        importData.push({
+          brand:                      (get(r,'marca')||'').toString().trim(),
+          code,
+          description:                (get(r,'descricao','descrição','descricão')||'').toString().trim(),
+          cost_price:                 parseFloat(get(r,'custo'))||0,
+          sale_config_type:           parseTypeVenda(get(r,'tipo venda')),
+          sale_config_value:          parseFloat(get(r,'venda'))||0,
+          resale_config_type:         parseTypeRevenda(get(r,'tipo revenda')),
+          resale_config_value:        parseFloat(get(r,'revenda'))||0,
+          volume_resale_config_type:  parseTypeRevenda(get(r,'tipo volume')),
+          volume_resale_config_value: parseFloat(get(r,'volume'))||0,
+          active: ci['ativo'] !== undefined
+            ? normalizeKey(r[ci['ativo']]) !== 'nao' && normalizeKey(r[ci['ativo']]) !== 'não' && r[ci['ativo']] !== '0'
+            : true,
+        });
+      }
+
+      const prev = $('import-preview');
+      prev.innerHTML = `
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:8px">
+          <strong>${importData.length} artigos</strong> prontos para importar/atualizar
+        </div>
+        <div style="overflow-x:auto;max-height:180px;overflow-y:auto;border-radius:6px;border:1px solid var(--c-border)">
+          <table style="font-size:11px;border-collapse:collapse;width:100%">
+            <thead><tr style="background:var(--c-primary);color:#fff;position:sticky;top:0">
+              <th style="padding:4px 8px;text-align:left">Marca</th>
+              <th style="padding:4px 8px;text-align:left">Código</th>
+              <th style="padding:4px 8px;text-align:left">Descrição</th>
+              <th style="padding:4px 8px;text-align:right">Custo</th>
+              <th style="padding:4px 8px;text-align:right">Venda</th>
+              <th style="padding:4px 8px;text-align:right">Rev.</th>
+            </tr></thead>
+            <tbody>${importData.slice(0,15).map((p,idx)=>`
+              <tr style="background:${idx%2?'#f8fafc':'#fff'}">
+                <td style="padding:3px 8px">${p.brand}</td>
+                <td style="padding:3px 8px">${p.code}</td>
+                <td style="padding:3px 8px">${p.description.substring(0,28)}${p.description.length>28?'…':''}</td>
+                <td style="padding:3px 8px;text-align:right">${p.cost_price}</td>
+                <td style="padding:3px 8px;text-align:right">${p.sale_config_value}${p.sale_config_type==='margin'?'%':'€'}</td>
+                <td style="padding:3px 8px;text-align:right">${p.resale_config_value}${p.resale_config_type==='percent_discount'?'%':'€'}</td>
+              </tr>`).join('')}
+            ${importData.length>15?`<tr><td colspan="6" style="padding:4px 8px;color:var(--c-muted);text-align:center">… mais ${importData.length-15} artigos</td></tr>`:''}
+            </tbody>
+          </table>
+        </div>`;
+      prev.style.display = '';
+      $('import-run').style.display = '';
+      $('import-result').style.display = 'none';
+    } catch(err) { toast('Erro ao ler ficheiro: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+$('import-run').addEventListener('click', async () => {
+  if (!importData.length) return;
+  $('import-run').disabled = true;
+  $('import-run').textContent = `A importar 0 / ${importData.length}…`;
+
+  let done = 0, errors = 0;
+  const chunk = 50;
+  for (let i = 0; i < importData.length; i += chunk) {
+    const { error } = await db.from('products').upsert(importData.slice(i, i+chunk), { onConflict: 'code' });
+    if (error) errors += Math.min(chunk, importData.length-i);
+    else done += Math.min(chunk, importData.length-i);
+    $('import-run').textContent = `A importar ${done+errors} / ${importData.length}…`;
+  }
+
+  $('import-run').disabled = false;
+  $('import-run').textContent = '⬆️ Importar / Atualizar Artigos';
+  const ok = errors === 0;
+  $('import-result').innerHTML = `<div style="background:${ok?'#f0fdf4':'#fef2f2'};border:1px solid ${ok?'#86efac':'#fca5a5'};border-radius:8px;padding:10px 12px;font-size:13px">
+    ${ok ? `✅ ${done} artigos importados/atualizados com sucesso.` : `⚠️ ${done} atualizados, ${errors} com erro.`}
+  </div>`;
+  $('import-result').style.display = '';
+  if (ok) {
+    importData = [];
+    $('import-file').value = '';
+    $('import-preview').style.display = 'none';
+    $('import-run').style.display = 'none';
+    loadAdminProducts();
+    fetchProducts();
+  }
+});
+
+$('dl-template').addEventListener('click', () => {
+  const data = [
+    ['Marca','Código','Descrição','Custo','Tipo Venda','Venda','Tipo Revenda','Revenda','Tipo Volume','Volume','Ativo'],
+    ['MARCA','ART-001','Produto Exemplo A',10.00,'margem',30,'desc%',20,'desc%',30,'sim'],
+    ['MARCA','ART-002','Produto Exemplo B',50.00,'preço',75.00,'desc€',5,'desc€',10,'sim'],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:12},{wch:12},{wch:30},{wch:8},{wch:12},{wch:8},{wch:14},{wch:8},{wch:12},{wch:8},{wch:6}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Artigos');
+  XLSX.writeFile(wb, 'template_artigos.xlsx');
+});
 
 // ── CREATE USER ───────────────────────────────────────────────
 $('uf-save').addEventListener('click', async () => {
