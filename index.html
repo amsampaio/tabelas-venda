@@ -503,6 +503,26 @@ async function loadProfile(user) {
 }
 
 async function init() {
+  // Detetar convite / recuperação de password no URL antes de qualquer outra coisa
+  const urlHash = new URLSearchParams(window.location.hash.substring(1));
+  const urlType = urlHash.get('type');
+
+  if (urlType === 'invite' || urlType === 'recovery') {
+    // O Supabase JS processa o token e dispara onAuthStateChange — aguardar
+    db.auth.onAuthStateChange(async (event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+        state.user = session.user;
+        const msg = urlType === 'invite'
+          ? 'Bem-vindo! Escolha a sua password de acesso.'
+          : 'Defina a sua nova password.';
+        showSetPassword(msg);
+      }
+      if (event === 'SIGNED_OUT') { state.user = null; state.profile = null; showLogin(); }
+    });
+    return;
+  }
+
+  // Fluxo normal
   const { data: { session } } = await db.auth.getSession();
   if (session?.user) {
     state.user = session.user;
@@ -513,14 +533,8 @@ async function init() {
   }
 
   db.auth.onAuthStateChange(async (event, session) => {
-    const urlType = new URLSearchParams(window.location.hash.substring(1)).get('type');
-    if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && urlType === 'invite') {
-      state.user = session.user;
-      showSetPassword('Bem-vindo! Escolha a sua password de acesso.');
-      return;
-    }
     if (event === 'PASSWORD_RECOVERY') {
-      state.user = session.user;
+      state.user = session?.user;
       showSetPassword('Defina a sua nova password.');
       return;
     }
